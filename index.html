@@ -3,84 +3,64 @@
 <head>
     <title>カメラ ビューワー</title>
     <link rel="icon" href="https://static.webcamtests.com/theme/img/favicon.ico">
+    <title>HDMI Monitor + Audio Select</title>
     <style>
         body { margin: 0; background: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
-        .panel { padding: 10px; background: #222; display: flex; gap: 10px; align-items: center; justify-content: center; z-index: 100; }
-        select, button { padding: 8px 15px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; }
-        button { background: #444; color: white; }
-        #full-btn { background: #007bff; }
-        #v-btn { background: #28a745; } /* 開始ボタンを緑に */
-        #container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
+        .panel { padding: 10px; background: #222; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; z-index: 100; }
+        select, button { padding: 8px; cursor: pointer; border-radius: 5px; border: none; font-size: 14px; }
+        #v-btn { background: #28a745; color: white; font-weight: bold; }
+        #container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
         video { width: 100%; height: 100%; object-fit: contain; }
-        #log { position: fixed; bottom: 10px; left: 10px; color: #ffadad; font-size: 12px; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
-        <select id="v-select"></select>
-        <button id="v-btn">映像・音声 開始</button>
-        <button id="full-btn">全画面表示</button>
+        映像: <select id="v-select"></select>
+        音声: <select id="a-select"></select>
+        <button id="v-btn">開始</button>
+        <button id="full-btn">全画面</button>
     </div>
 
     <div id="container">
-        <!-- mutedを外して音声を出せるように設定 -->
         <video id="v-view" autoplay playsinline></video>
-        <div id="log"></div>
     </div>
 
     <script>
         const vView = document.getElementById('v-view');
         const vSelect = document.getElementById('v-select');
-        const container = document.getElementById('container');
-        const log = document.getElementById('log');
+        const aSelect = document.getElementById('a-select');
 
         async function setup() {
             try {
-                // 初回に権限取得（映像と音声を両方要求）
+                // 権限取得
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 stream.getTracks().forEach(t => t.stop());
                 
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                vSelect.innerHTML = '';
-                devices.filter(d => d.kind === 'videoinput').forEach(d => {
+                
+                devices.forEach(d => {
                     const opt = document.createElement('option');
                     opt.value = d.deviceId;
-                    opt.text = d.label || "USB Video Device";
-                    vSelect.appendChild(opt);
+                    opt.text = d.label || `${d.kind} ${vSelect.length + 1}`;
+                    if (d.kind === 'videoinput') vSelect.appendChild(opt);
+                    if (d.kind === 'audioinput') aSelect.appendChild(opt);
                 });
-            } catch (e) {
-                log.innerText = "エラー: カメラとマイクを許可してください " + e;
-            }
+            } catch (e) { alert("許可が必要です: " + e); }
         }
 
         document.getElementById('v-btn').onclick = async () => {
-            try {
-                const constraints = {
-                    video: { deviceId: { exact: vSelect.value } },
-                    audio: { deviceId: 'default' } // キャプチャボードの音声を拾う
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                vView.srcObject = stream;
-                
-                // ブラウザのミュート解除を強制
-                vView.muted = false;
-                vView.volume = 1.0; 
-                
-                log.innerText = "音声出力中...";
-                setTimeout(() => log.innerText = "", 3000);
-            } catch (e) {
-                log.innerText = "接続失敗: " + e.message;
-            }
+            const constraints = {
+                video: { deviceId: { exact: vSelect.value } },
+                audio: { deviceId: { exact: aSelect.value } }
+            };
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            vView.srcObject = stream;
+            vView.muted = false; // ミュート解除
+            vView.volume = 1.0;
         };
 
-        document.getElementById('full-btn').onclick = () => {
-            if (!document.fullscreenElement) {
-                container.requestFullscreen();
-            } else {
-                document.exitFullscreen();
-            }
-        };
+        document.getElementById('full-btn').onclick = () => document.getElementById('container').requestFullscreen();
 
         setup();
     </script>
