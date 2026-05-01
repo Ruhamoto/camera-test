@@ -1,29 +1,30 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <title>Camera Viewer</title>
+    <title>カメラ ビューワー</title>
     <link rel="icon" href="https://static.webcamtests.com/theme/img/favicon.ico">
     <style>
         body { margin: 0; background: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
         .panel { padding: 10px; background: #222; display: flex; gap: 10px; align-items: center; justify-content: center; z-index: 100; }
         select, button { padding: 8px 15px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; }
         button { background: #444; color: white; }
-        button:hover { background: #666; }
-        #full-btn { background: #007bff; } /* 全画面ボタンは青色 */
+        #full-btn { background: #007bff; }
+        #v-btn { background: #28a745; } /* 開始ボタンを緑に */
         #container { flex-grow: 1; position: relative; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: contain; } /* アスペクト比を維持 */
-        #log { position: fixed; bottom: 10px; left: 10px; color: red; font-size: 12px; pointer-events: none; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        #log { position: fixed; bottom: 10px; left: 10px; color: #ffadad; font-size: 12px; pointer-events: none; }
     </style>
 </head>
 <body>
 
     <div class="panel">
         <select id="v-select"></select>
-        <button id="v-btn">映像開始</button>
+        <button id="v-btn">映像・音声 開始</button>
         <button id="full-btn">全画面表示</button>
     </div>
 
     <div id="container">
+        <!-- mutedを外して音声を出せるように設定 -->
         <video id="v-view" autoplay playsinline></video>
         <div id="log"></div>
     </div>
@@ -34,51 +35,51 @@
         const container = document.getElementById('container');
         const log = document.getElementById('log');
 
-        // デバイス一覧を取得
         async function setup() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                // 初回に権限取得（映像と音声を両方要求）
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 stream.getTracks().forEach(t => t.stop());
+                
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 vSelect.innerHTML = '';
                 devices.filter(d => d.kind === 'videoinput').forEach(d => {
                     const opt = document.createElement('option');
                     opt.value = d.deviceId;
-                    opt.text = d.label || "USBデバイス";
+                    opt.text = d.label || "USB Video Device";
                     vSelect.appendChild(opt);
                 });
             } catch (e) {
-                log.innerText = "エラー: カメラを許可してください " + e;
+                log.innerText = "エラー: カメラとマイクを許可してください " + e;
             }
         }
 
-        // 映像開始
         document.getElementById('v-btn').onclick = async () => {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { deviceId: { exact: vSelect.value } }
-                });
+                const constraints = {
+                    video: { deviceId: { exact: vSelect.value } },
+                    audio: { deviceId: 'default' } // キャプチャボードの音声を拾う
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 vView.srcObject = stream;
+                
+                // ブラウザのミュート解除を強制
+                vView.muted = false;
+                vView.volume = 1.0; 
+                
+                log.innerText = "音声出力中...";
+                setTimeout(() => log.innerText = "", 3000);
             } catch (e) {
                 log.innerText = "接続失敗: " + e.message;
             }
         };
 
-        // 全画面切り替え
         document.getElementById('full-btn').onclick = () => {
             if (!document.fullscreenElement) {
-                // videoタグを入れているコンテナを全画面にする
-                container.requestFullscreen().catch(err => {
-                    alert(`全画面エラー: ${err.message}`);
-                });
+                container.requestFullscreen();
             } else {
                 document.exitFullscreen();
             }
-        };
-
-        // 全画面中のダブルクリックでも解除できるようにする
-        vView.ondblclick = () => {
-            if (document.fullscreenElement) document.exitFullscreen();
         };
 
         setup();
