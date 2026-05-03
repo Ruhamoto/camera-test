@@ -10,30 +10,51 @@
         select, button { padding: 8px; cursor: pointer; border-radius: 5px; border: none; font-size: 14px; }
         #v-btn { background: #28a745; color: white; font-weight: bold; }
         #container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: contain; }
+        /* 枠の比率を維持するためのラッパー */
+        #video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        /* 映像は常にラッパーいっぱいに広げる */
+        video { 
+            width: 100%;
+            height: 100%;
+            object-fit: fill !important; /* ラッパーの比率に強制的に合わせる */
+        }
     </style>
 </head>
 <body>
 
-    <div class="panel">
+   <div class="panel">
         映像: <select id="v-select"></select>
         音声: <select id="a-select"></select>
+        比率: 
+        <input type="number" id="ratio-w" value="16" step="0.1"> : 
+        <input type="number" id="ratio-h" value="9" step="0.1">
         <button id="v-btn">開始</button>
         <button id="full-btn">全画面</button>
     </div>
 
     <div id="container">
-        <video id="v-view" autoplay playsinline></video>
+        <div id="video-wrapper">
+            <video id="v-view" autoplay playsinline></video>
+        </div>
     </div>
 
     <script>
         const vView = document.getElementById('v-view');
         const vSelect = document.getElementById('v-select');
         const aSelect = document.getElementById('a-select');
+        const ratioW = document.getElementById('ratio-w');
+        const ratioH = document.getElementById('ratio-h');
+        const videoWrapper = document.getElementById('video-wrapper');
+        const container = document.getElementById('container');
 
         async function setup() {
             try {
-                // 権限取得
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 stream.getTracks().forEach(t => t.stop());
                 
@@ -46,7 +67,34 @@
                     if (d.kind === 'videoinput') vSelect.appendChild(opt);
                     if (d.kind === 'audioinput') aSelect.appendChild(opt);
                 });
+                
+                updateRatio();
             } catch (e) { alert("許可が必要です: " + e); }
+        }
+
+        // 比率を計算して適用する関数
+        function updateRatio() {
+            const w = parseFloat(ratioW.value);
+            const h = parseFloat(ratioH.value);
+            
+            if (w > 0 && h > 0) {
+                // コンテナ（画面全体）のサイズを取得
+                const containerW = container.clientWidth;
+                const containerH = container.clientHeight;
+                
+                // 入力された比率から、最適な幅と高さを計算
+                let targetW, targetH;
+                if (containerW / containerH > w / h) {
+                    targetH = containerH;
+                    targetW = containerH * (w / h);
+                } else {
+                    targetW = containerW;
+                    targetH = containerW / (w / h);
+                }
+                
+                videoWrapper.style.width = `${targetW}px`;
+                videoWrapper.style.height = `${targetH}px`;
+            }
         }
 
         document.getElementById('v-btn').onclick = async () => {
@@ -56,11 +104,19 @@
             };
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             vView.srcObject = stream;
-            vView.muted = false; // ミュート解除
+            vView.muted = false;
             vView.volume = 1.0;
+            updateRatio(); // 開始時にも比率を適用
         };
 
         document.getElementById('full-btn').onclick = () => document.getElementById('container').requestFullscreen();
+
+        // 入力欄の値が変わったら即座に比率を反映
+        ratioW.oninput = updateRatio;
+        ratioH.oninput = updateRatio;
+        
+        // 画面サイズが変わったとき（全画面にしたときなど）も再計算
+        window.onresize = updateRatio;
 
         setup();
     </script>
