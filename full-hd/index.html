@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>フルHD カメラ ビューワー</title>
+    <link rel="icon" href="https://static.webcamtests.com/theme/img/favicon.ico">
+    <style>
+        body { margin: 0; background: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        .panel { padding: 10px; background: #222; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; z-index: 100; font-size: 14px; }
+        select, button, input { padding: 6px; cursor: pointer; border-radius: 5px; border: none; font-size: 14px; }
+        input[type="number"] { width: 60px; text-align: center; }
+        #v-btn { background: #28a745; color: white; font-weight: bold; }
+        #full-btn { background: #007bff; color: white; }
+        #container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #000; overflow: hidden; position: relative; }
+        #video-wrapper { position: relative; width: 100%; max-width: 100%; max-height: 100%; }
+        video { width: 100%; height: 100%; object-fit: fill !important; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        映像: <select id="v-select"></select>
+        音声: <select id="a-select"></select>
+        比率: <input type="number" id="ratio-w" value="16" step="0.1"> : <input type="number" id="ratio-h" value="9" step="0.1">
+        <button id="v-btn">最高画質で開始</button>
+        <button id="full-btn">全画面</button>
+    </div>
+
+    <div id="container">
+        <div id="video-wrapper">
+            <video id="v-view" autoplay playsinline></video>
+        </div>
+    </div>
+
+    <script>
+        const vView = document.getElementById('v-view');
+        const vSelect = document.getElementById('v-select');
+        const aSelect = document.getElementById('a-select');
+        const ratioW = document.getElementById('ratio-w');
+        const ratioH = document.getElementById('ratio-h');
+        const videoWrapper = document.getElementById('video-wrapper');
+        const container = document.getElementById('container');
+
+        async function setup() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                stream.getTracks().forEach(t => t.stop());
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                devices.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `${d.kind}`;
+                    if (d.kind === 'videoinput') vSelect.appendChild(opt);
+                    if (d.kind === 'audioinput') aSelect.appendChild(opt);
+                });
+                updateRatio();
+            } catch (e) { alert(e); }
+        }
+
+        function updateRatio() {
+            const w = parseFloat(ratioW.value);
+            const h = parseFloat(ratioH.value);
+            if (w > 0 && h > 0) {
+                const containerW = container.clientWidth;
+                const containerH = container.clientHeight;
+                let targetW, targetH;
+                if (containerW / containerH > w / h) {
+                    targetH = containerH; targetW = containerH * (w / h);
+                } else {
+                    targetW = containerW; targetH = containerW / (w / h);
+                }
+                videoWrapper.style.width = `${targetW}px`;
+                videoWrapper.style.height = `${targetH}px`;
+            }
+        }
+
+        document.getElementById('v-btn').onclick = async () => {
+            const constraints = {
+                video: { 
+                    deviceId: { exact: vSelect.value },
+                    // 【ここがポイント】解像度とフレームレートを限界まで要求する
+                    width: { ideal: 3840, min: 1280 }, 
+                    height: { ideal: 2160, min: 720 },
+                    frameRate: { ideal: 60 }
+                },
+                audio: { deviceId: { exact: aSelect.value } }
+            };
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                vView.srcObject = stream;
+                vView.muted = false;
+                updateRatio();
+            } catch (e) {
+                alert("指定の画質で開けませんでした。少し設定を下げて試します。");
+                const fallbackStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+                vView.srcObject = fallbackStream;
+            }
+        };
+
+        document.getElementById('full-btn').onclick = () => container.requestFullscreen();
+        ratioW.oninput = updateRatio;
+        ratioH.oninput = updateRatio;
+        window.onresize = updateRatio;
+        setup();
+    </script>
+</body>
+</html>
